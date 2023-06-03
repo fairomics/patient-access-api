@@ -51,8 +51,9 @@ pub async fn get_ngrok_listener(config: &NgrokConfig) -> Result<HttpTunnel, Box<
 
 fn initialize_state(settings: &Settings, scope: &str) -> Result<AuthAppState, Box<dyn Error>> {
     // Auth Config
-    let auth_config = match scope.to_string().contains("prod") {
-        true => settings.cigna_prod.clone(),
+    let auth_config = match scope {
+        "cigna_prod" => settings.cigna_prod.clone(),
+        "cigna_sandbox" => settings.cigna_sandbox.clone(),
         _ => settings.cigna_sandbox.clone(),
     };
     tracing::debug!("Auth Config: {:?}", &auth_config);
@@ -75,7 +76,7 @@ pub async fn app_router(settings: &Settings, scope: &str) -> Result<Router, Box<
 
     let app_router = Router::new()
         .route("/", get(welcome_handler))
-        .route("/authz_sandbox", get(authz_sandbox))
+        .route("/authz", get(authz))
         .route("/callback", get(callback_handler))
         .with_state(shared_state);
     Ok(app_router)

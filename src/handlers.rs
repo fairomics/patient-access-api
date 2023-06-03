@@ -12,7 +12,7 @@ pub async fn welcome_handler() -> String {
     format!("Welcome Page! 🤗")
 }
 
-pub async fn authz_sandbox(State(state): State<AuthAppState>) -> Redirect {
+pub async fn authz(State(state): State<AuthAppState>) -> Redirect {
     // Get redirect authorization url
     let (auth_url, csrf_token, pkce_verifier) =
         oauth_pkce_auth_url(&state.oauth_client, &state.api_scopes)
