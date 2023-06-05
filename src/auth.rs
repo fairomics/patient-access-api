@@ -17,6 +17,7 @@ pub struct AuthConfig {
     pub auth_url: String,
     pub api_scopes: Vec<String>,
     pub redirect_url: String,
+    pub api_base_url: String,
 }
 
 pub fn get_oauth_client(config: &AuthConfig) -> Result<BasicClient, Box<dyn Error>> {

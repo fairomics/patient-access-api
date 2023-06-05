@@ -1,5 +1,7 @@
 #![allow(dead_code)]
 
+use std::error::Error;
+
 use crate::app::{AuthAppState, CallbackQuery};
 use crate::auth::{oauth_pkce_access_token, oauth_pkce_auth_url};
 use axum::{
@@ -7,8 +9,24 @@ use axum::{
     response::Redirect,
 };
 use oauth2::{PkceCodeVerifier, TokenResponse};
+use reqwest::header::{HeaderMap, AUTHORIZATION};
+use reqwest::Client;
+use serde::Deserialize;
 
-pub async fn welcome_handler() -> String {
+#[derive(Deserialize, Debug)]
+struct UserInfo {
+    id: String,
+    parameter: Vec<PatientID>,
+    resourceType: String,
+}
+
+#[derive(Deserialize, Debug)]
+pub struct PatientID {
+    name: String,
+    valueString: String,
+}
+
+pub async fn welcome() -> String {
     format!("Welcome Page! 🤗")
 }
 
@@ -32,7 +50,7 @@ pub async fn authz(State(state): State<AuthAppState>) -> Redirect {
     Redirect::permanent(auth_url.as_str())
 }
 
-pub async fn callback_handler(
+pub async fn callback(
     Query(params): Query<CallbackQuery>,
     State(state): State<AuthAppState>,
 ) -> String {
@@ -84,4 +102,55 @@ pub async fn shutdown_signal() {
         .await
         .expect("expect tokio signal ctrl-c");
     tracing::warn!("🎬🎬🎬 received signal ctrl-C => shutdown!");
+}
+
+pub async fn userinfo(State(state): State<AuthAppState>) -> String {
+    let token = state.access_token.read().unwrap().clone();
+    let patient_id = get_patient_id(&state.request_client, &token, &state.api_base_url).await;
+    let result = get_coverage(
+        &state.request_client,
+        &token,
+        &state.api_base_url,
+        &patient_id[0],
+    )
+    .await;
+    format!("{}", result)
+}
+
+pub async fn get_patient_id(
+    client: &Client,
+    access_token: &str,
+    api_base_url: &str,
+) -> Vec<PatientID> {
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        AUTHORIZATION,
+        format!("Bearer {}", access_token).parse().unwrap(),
+    );
+    let url = format!("{api_base_url}/$userinfo");
+    let response = client.get(url).headers(headers).send().await.unwrap();
+    let patient_id = response.json::<UserInfo>().await.unwrap().parameter;
+    tracing::debug!("Extracted Patient ID: {:?}", &patient_id);
+    patient_id
+}
+
+pub async fn get_coverage(
+    client: &Client,
+    access_token: &str,
+    api_base_url: &str,
+    patient_id: &PatientID,
+) -> String {
+    let mut headers = HeaderMap::new();
+    headers.insert(
+        AUTHORIZATION,
+        format!("Bearer {}", access_token).parse().unwrap(),
+    );
+    let url = format!(
+        "{}/Coverage?patient={}",
+        api_base_url, patient_id.valueString
+    );
+    let response = client.get(url).headers(headers).send().await.unwrap();
+    let result = response.text().await.unwrap();
+    tracing::debug!("Extracted Coverage: {:?}", &result);
+    format!("Coverage {:?}", result)
 }
